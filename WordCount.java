@@ -1,44 +1,59 @@
-package p1;
+package wc;
 
 import org.apache.flink.api.common.functions.FilterFunction;
+import org.apache.flink.api.common.functions.MapFunction;
 import org.apache.flink.api.java.DataSet;
 import org.apache.flink.api.java.ExecutionEnvironment;
-import org.apache.flink.api.java.tuple.Tuple2;
 import org.apache.flink.api.java.utils.ParameterTool;
+import org.apache.flink.api.java.tuple.Tuple2;
 
 public class WordCount {
-
-	public static void main(String[] args) throws Exception {
-		// Create execution environment
-		final ExecutionEnvironment env = ExecutionEnvironment.getExecutionEnvironment();
+	
+	public static void main(String args[]) throws Exception {
 		
-		// Load parameters
-		final ParameterTool param = ParameterTool.fromArgs(args);
+		// Create local environment
+		final ExecutionEnvironment env = ExecutionEnvironment.createLocalEnvironment();
 		
-		// Set Parameter to all envs
-		env.getConfig().setGlobalJobParameters(param);
+		// Read params from args
+		final ParameterTool params = ParameterTool.fromArgs(args);
 		
-		// Load data to dataset 
-		DataSet<String> text = env.readTextFile(param.get("input"));
+		// set parameters as global
+		env.getConfig().setGlobalJobParameters(params);
 		
-		// filter words containing hyphen
+		//read text file
+		DataSet<String> text = env.readTextFile(params.get("inputFile"));
+		
+		//Filter records with name starting with A
 		DataSet<String> filteredText = text.filter(new FilterFunction<String>() {
 			
-			public boolean filter(String value) throws Exception {
-				return value.contains("-");
+			public boolean filter(String name) {
+				return name.contains(params.get("containsKey"));
 			}
+			
 		});
 		
-		DataSet<Tuple2<String,Integer>> mappedText = filteredText.map(new Tokenizer());
+		// Tokenize records to get count
 		
-		DataSet<Tuple2<String,Integer>> groupedText = mappedText.groupBy(0).sum(1);
+		DataSet<Tuple2<String, Integer>> tokenized = filteredText.map(new Tokenizer());
 		
+		DataSet<Tuple2<String, Integer>> wordCount = tokenized.groupBy(0).sum(1);
 		
-		if(param.has("output")) {
-			groupedText.writeAsCsv(param.get("output"),"\n"," ");
+		if(params.has("outputFilePath")) {
 			
+			wordCount.writeAsCsv(params.get("outputFilePath"));
+			
+			env.execute("Word count application");
 		}
-		env.execute("Wordcount example");
+		
+		
 		
 	}
+	
+	public static final class Tokenizer implements MapFunction<String, Tuple2<String, Integer>>{ 	
+		
+		public Tuple2<String, Integer> map(String data){
+			return new Tuple2<String, Integer>(data.toLowerCase(),1);
+		}
+	}
+
 }
